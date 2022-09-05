@@ -1,0 +1,11 @@
+[package]
+name = "vcf_to_hapmap"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+vcf = "0.6.0"
+flate2 = "1.0.24"
+bstr = "0.2.17"
