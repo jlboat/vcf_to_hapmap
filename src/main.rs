@@ -90,11 +90,17 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
             }
             for item in split_genotype {
                 if item.eq("0") {
-                    stream.write((&reference).as_ref())
+                    let bytes_amount = stream.write((&reference).as_ref())
                         .expect("Failed to write reference allele to output");
+                    if reference.len() != bytes_amount{
+                        panic!("Ref allele write failed");
+                    }
                 } else if item.eq("1") {
-                    stream.write((&alternative).as_ref())
+                    let bytes_amount = stream.write((&alternative).as_ref())
                         .expect("Failed to write alternative allele to output");
+                    if alternative.len() != bytes_amount{
+                        panic!("Alt allele write failed");
+                    }
                 }
             }
         }
