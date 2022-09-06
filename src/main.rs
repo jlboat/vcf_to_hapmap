@@ -23,15 +23,27 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
     let output = File::create(output_filename)
         .expect("Failed to create output file");
     let mut stream = BufWriter::new(output);
-    stream.write(hapmap_vector.join("\t").as_ref()
-    ).expect("Failed to write header");
+    let buffer_out = hapmap_vector.join("\t");
+    let bytes_amount = stream.write(buffer_out.as_ref()).expect("Failed to write header");
+    if buffer_out.len() != bytes_amount {
+        panic!("Failed to write header to BufWriter");
+    }
 
     for sample in reader.header().samples() {
-        stream.write(format!("\t{}", sample.to_str()
+        let buffer_out = format!("\t{}", sample.to_str()
             .expect("Failed to convert sample to string")
-        ).as_ref()).expect("Failed to write to output");
+        );
+        let bytes_amount = stream.write(buffer_out.as_ref())
+            .expect("Failed to write to output");
+        if buffer_out.len() != bytes_amount {
+            panic!("Failed to write header to BufWriter");
+        }
     }
-    stream.write(b"\n").expect("Failed to write newline after header");
+    let bytes_amount = stream.write(b"\n")
+        .expect("Failed to write newline after header");
+    if b"\n".len() != bytes_amount {
+        panic!("Failed to write header to BufWriter");
+    }
 
     let mut vcf_record = reader.empty_record();
     while reader.next_record(&mut vcf_record).expect("Failed to read record") {
@@ -39,10 +51,10 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
         ).expect("Failed ref");
         let alternative = String::from_utf8(vcf_record.alternative
             .to_vec().get(0).expect("Failed alt").to_vec()
-        ).expect("");
+        ).expect("Failed to convert alt");
         let chromosome = String::from_utf8(vcf_record.chromosome.to_vec())
             .expect("Failed to convert chromosome to string [snp name]");
-        stream.write(format!("{}_{}\t{}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        let buffer_out = format!("{}_{}\t{}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                              &chromosome,
                              &vcf_record.position.to_string(),
                              &reference,
@@ -50,7 +62,12 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
                              &chromosome.replace("Chr0", "").replace("Chr", ""),
                              &vcf_record.position.to_string(),
                              "+", "NA", "NA", "NA", "NA", "NA", "NA"
-        ).as_ref()).expect("Failed to write to output");
+        );
+        let bytes_amount = stream.write(buffer_out.as_ref())
+            .expect("Failed to write to output");
+        if buffer_out.len() != bytes_amount {
+            panic!("Failed to write marker to BufWriter");
+        }
 
         for sample in reader.header().samples() {
             let genotype = String::from_utf8(
@@ -58,13 +75,16 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
                     .expect("Failed to get genotype")
                     .to_vec().get(0).expect("").to_vec())
                 .expect("Failed to convert genotype to string");
-            stream.write(b"\t").expect("Genotype tab failed");
+            let bytes_amount = stream.write(b"\t").expect("Genotype tab failed");
+            if b"\t".len() != bytes_amount{
+                panic!("Failed to write genotype tab");
+            }
 
             let split_genotype;
-            if genotype.contains("/"){
-                split_genotype = genotype.split("/");
-            } else if genotype.contains("|"){
-                split_genotype = genotype.split("|");
+            if genotype.contains('/'){
+                split_genotype = genotype.split('/');
+            } else if genotype.contains('|'){
+                split_genotype = genotype.split('|');
             } else {
                 panic!("Uncertain genotype encoding");
             }
@@ -78,7 +98,11 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
                 }
             }
         }
-        stream.write(b"\n").expect("");
+        let bytes_amount = stream.write(b"\n").expect("");
+        if b"\n".len() != bytes_amount{
+            panic!("Failed to write newline");
+        }
+
     }
 }
 
