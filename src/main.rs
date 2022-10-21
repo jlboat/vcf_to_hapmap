@@ -8,42 +8,44 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use flate2::read::MultiGzDecoder;
 
-pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
-    let mut reader = VCFReader::new(
+fn open_gzvcf(filename: &str) -> VCFReader<BufReader<MultiGzDecoder<File>>> {
+    let vcf = VCFReader::new(
         BufReader::new(
             MultiGzDecoder::new(
-                File::open(input_filename,
+                File::open(filename,
                 ).expect("Failed to read file.")))).expect("Failed to read VCF");
+    return vcf
+}
 
+fn write_check(mut stream: BufWriter<File>, output: &[u8]) -> BufWriter<File>{
+    let bytes_amount = stream.write(output)
+        .expect("Failed to write to hapmap");
+    if output.len() != bytes_amount {
+        panic!("Failed to write to BufWriter");
+    }
+    return stream
+}
+
+fn get_header_prefix() -> String {
     let hapmap_vector: [String; 11] = ["rs".to_string(), "alleles".to_string(), "chrom".to_string(),
         "pos".to_string(), "strand".to_string(), "assembly".to_string(),
         "center".to_string(), "protLSID".to_string(),
         "assayLSID".to_string(), "panelLSID".to_string(), "QCcode".to_string()];
+    return hapmap_vector.join("\t")
+}
 
+pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
+    let mut reader = open_gzvcf(input_filename);
     let output = File::create(output_filename)
         .expect("Failed to create output file");
     let mut stream = BufWriter::new(output);
-    let buffer_out = hapmap_vector.join("\t");
-    let bytes_amount = stream.write(buffer_out.as_ref()).expect("Failed to write header");
-    if buffer_out.len() != bytes_amount {
-        panic!("Failed to write header to BufWriter");
-    }
+    stream = write_check(stream, get_header_prefix().as_ref());
 
     for sample in reader.header().samples() {
-        let buffer_out = format!("\t{}", sample.to_str()
-            .expect("Failed to convert sample to string")
-        );
-        let bytes_amount = stream.write(buffer_out.as_ref())
-            .expect("Failed to write to output");
-        if buffer_out.len() != bytes_amount {
-            panic!("Failed to write header to BufWriter");
-        }
+        stream = write_check(stream, b"\t");
+        stream = write_check(stream, sample.to_str().expect("").as_ref());
     }
-    let bytes_amount = stream.write(b"\n")
-        .expect("Failed to write newline after header");
-    if b"\n".len() != bytes_amount {
-        panic!("Failed to write header to BufWriter");
-    }
+    stream = write_check(stream, b"\n");
 
     let mut vcf_record = reader.empty_record();
     while reader.next_record(&mut vcf_record).expect("Failed to read record") {
@@ -63,11 +65,7 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
                              &vcf_record.position.to_string(),
                              "+", "NA", "NA", "NA", "NA", "NA", "NA"
         );
-        let bytes_amount = stream.write(buffer_out.as_ref())
-            .expect("Failed to write to output");
-        if buffer_out.len() != bytes_amount {
-            panic!("Failed to write marker to BufWriter");
-        }
+        stream = write_check(stream, buffer_out.as_ref());
 
         for sample in reader.header().samples() {
             let genotype = String::from_utf8(
@@ -75,10 +73,7 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
                     .expect("Failed to get genotype")
                     .to_vec().get(0).expect("").to_vec())
                 .expect("Failed to convert genotype to string");
-            let bytes_amount = stream.write(b"\t").expect("Genotype tab failed");
-            if b"\t".len() != bytes_amount{
-                panic!("Failed to write genotype tab");
-            }
+            stream = write_check(stream, b"\t");
 
             let split_genotype;
             if genotype.contains('/'){
@@ -90,25 +85,13 @@ pub(crate) fn vcf_to_hapmap(input_filename: &str, output_filename: &str) {
             }
             for item in split_genotype {
                 if item.eq("0") {
-                    let bytes_amount = stream.write((&reference).as_ref())
-                        .expect("Failed to write reference allele to output");
-                    if reference.len() != bytes_amount{
-                        panic!("Ref allele write failed");
-                    }
+                    stream = write_check(stream, (reference).as_ref());
                 } else if item.eq("1") {
-                    let bytes_amount = stream.write((&alternative).as_ref())
-                        .expect("Failed to write alternative allele to output");
-                    if alternative.len() != bytes_amount{
-                        panic!("Alt allele write failed");
-                    }
+                    stream = write_check(stream, (alternative).as_ref());
                 }
             }
         }
-        let bytes_amount = stream.write(b"\n").expect("");
-        if b"\n".len() != bytes_amount{
-            panic!("Failed to write newline");
-        }
-
+        stream = write_check(stream, b"\n");
     }
 }
 
